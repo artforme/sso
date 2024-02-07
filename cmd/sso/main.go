@@ -3,7 +3,10 @@ package main
 import (
 	"log/slog"
 	"os"
+	"os/signal"
+	"sso/internal/app"
 	"sso/internal/config"
+	"syscall"
 )
 
 const (
@@ -17,13 +20,22 @@ func main() {
 
 	log := SetupLogger(cfg.Env)
 
-	log.Info("config", slog.Any("cfg", cfg))
+	log.Info("starting application", slog.Any("cfg", cfg))
 
-	log.Debug("debug message")
+	application := app.New(log, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
 
-	log.Info("info message")
+	go application.GRPCSrv.MustRun()
 
-	log.Warn("warn message")
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+
+	callBack := <-stop
+
+	log.Info("stopping application", slog.Any("signal", callBack.String()))
+
+	application.GRPCSrv.Stop()
+
+	log.Info("application has been stopped")
 }
 
 // SetupLogger set the type and level of logger depending on env
